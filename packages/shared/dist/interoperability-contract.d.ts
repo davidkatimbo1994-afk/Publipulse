@@ -1,0 +1,93 @@
+import { z } from 'zod';
+export declare const InteroperabilityContractVersionSchema: z.ZodLiteral<"1.0">;
+export declare const ExchangeDirectionSchema: z.ZodEnum<["import", "export"]>;
+export declare const ExchangeModeSchema: z.ZodEnum<["metadata", "aggregate_data"]>;
+export declare const InteroperabilityProviderSchema: z.ZodEnum<["dhis2", "fhir", "csv", "other"]>;
+export declare const ExchangeJobStatusSchema: z.ZodEnum<["queued", "running", "succeeded", "failed", "rejected", "cancelled"]>;
+export declare const ExchangeRejectionCodeSchema: z.ZodEnum<["policy_missing", "policy_inactive", "indicator_not_allowed", "cross_border_not_allowed", "idempotency_conflict", "profile_missing", "profile_not_verified", "capability_missing", "country_mismatch", "programme_mismatch", "mapping_missing", "contract_invalid", "transport_disabled"]>;
+export declare const InteroperabilityContractSchema: z.ZodObject<{
+    contractVersion: z.ZodLiteral<"1.0">;
+    provider: z.ZodEnum<["dhis2", "fhir", "csv", "other"]>;
+    direction: z.ZodEnum<["import", "export"]>;
+    mode: z.ZodEnum<["metadata", "aggregate_data"]>;
+    countryCode: z.ZodString;
+    programmeCode: z.ZodOptional<z.ZodString>;
+    indicatorCodes: z.ZodArray<z.ZodString, "many">;
+    integrationProfileId: z.ZodString;
+    mappingVersion: z.ZodString;
+    administrativeUnitMappingVersion: z.ZodOptional<z.ZodString>;
+    requestedBy: z.ZodString;
+    sourceSystem: z.ZodString;
+    sourceRecordIds: z.ZodDefault<z.ZodArray<z.ZodString, "many">>;
+    purpose: z.ZodString;
+    crossBorder: z.ZodDefault<z.ZodBoolean>;
+}, "strict", z.ZodTypeAny, {
+    countryCode: string;
+    purpose: string;
+    provider: "other" | "dhis2" | "csv" | "fhir";
+    mappingVersion: string;
+    contractVersion: "1.0";
+    direction: "import" | "export";
+    mode: "metadata" | "aggregate_data";
+    indicatorCodes: string[];
+    integrationProfileId: string;
+    requestedBy: string;
+    sourceSystem: string;
+    sourceRecordIds: string[];
+    crossBorder: boolean;
+    programmeCode?: string | undefined;
+    administrativeUnitMappingVersion?: string | undefined;
+}, {
+    countryCode: string;
+    purpose: string;
+    provider: "other" | "dhis2" | "csv" | "fhir";
+    mappingVersion: string;
+    contractVersion: "1.0";
+    direction: "import" | "export";
+    mode: "metadata" | "aggregate_data";
+    indicatorCodes: string[];
+    integrationProfileId: string;
+    requestedBy: string;
+    sourceSystem: string;
+    programmeCode?: string | undefined;
+    administrativeUnitMappingVersion?: string | undefined;
+    sourceRecordIds?: string[] | undefined;
+    crossBorder?: boolean | undefined;
+}>;
+export type InteroperabilityContract = z.infer<typeof InteroperabilityContractSchema>;
+export declare const ExchangeReceiptSchema: z.ZodObject<{
+    exchangeId: z.ZodString;
+    status: z.ZodEnum<["accepted", "rejected", "completed", "failed"]>;
+    provider: z.ZodEnum<["dhis2", "fhir", "csv", "other"]>;
+    contractVersion: z.ZodLiteral<"1.0">;
+    idempotencyKey: z.ZodString;
+    externalReference: z.ZodOptional<z.ZodString>;
+    receivedAt: z.ZodString;
+    message: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    status: "completed" | "failed" | "rejected" | "accepted";
+    provider: "other" | "dhis2" | "csv" | "fhir";
+    contractVersion: "1.0";
+    exchangeId: string;
+    idempotencyKey: string;
+    receivedAt: string;
+    message?: string | undefined;
+    externalReference?: string | undefined;
+}, {
+    status: "completed" | "failed" | "rejected" | "accepted";
+    provider: "other" | "dhis2" | "csv" | "fhir";
+    contractVersion: "1.0";
+    exchangeId: string;
+    idempotencyKey: string;
+    receivedAt: string;
+    message?: string | undefined;
+    externalReference?: string | undefined;
+}>;
+export type ExchangeReceipt = z.infer<typeof ExchangeReceiptSchema>;
+export type ExchangeTransport = {
+    execute(contract: InteroperabilityContract): Promise<{
+        externalReference?: string;
+    }>;
+};
+export declare function normalizeIndicatorCodes(codes: readonly string[]): string[];
+export declare function stableContractFingerprint(contract: InteroperabilityContract): string;

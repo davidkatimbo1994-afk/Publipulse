@@ -1,0 +1,68 @@
+import { z } from 'zod';
+export declare const PilotEvidenceRecordInputSchema: z.ZodEffects<z.ZodObject<{
+    label: z.ZodString;
+    baselineStart: z.ZodString;
+    baselineEnd: z.ZodString;
+    pilotStart: z.ZodString;
+    pilotEnd: z.ZodString;
+    minCell: z.ZodNumber;
+    weeklyDecisionChangeCount: z.ZodNumber;
+    offlineSyncIncidentCount: z.ZodNumber;
+    integrationIncidentCount: z.ZodNumber;
+    privacyIncidentCount: z.ZodNumber;
+    securityIncidentCount: z.ZodNumber;
+    evidenceDigest: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    label: string;
+    baselineStart: string;
+    baselineEnd: string;
+    pilotStart: string;
+    pilotEnd: string;
+    minCell: number;
+    weeklyDecisionChangeCount: number;
+    offlineSyncIncidentCount: number;
+    integrationIncidentCount: number;
+    privacyIncidentCount: number;
+    securityIncidentCount: number;
+    evidenceDigest?: string | undefined;
+}, {
+    label: string;
+    baselineStart: string;
+    baselineEnd: string;
+    pilotStart: string;
+    pilotEnd: string;
+    minCell: number;
+    weeklyDecisionChangeCount: number;
+    offlineSyncIncidentCount: number;
+    integrationIncidentCount: number;
+    privacyIncidentCount: number;
+    securityIncidentCount: number;
+    evidenceDigest?: string | undefined;
+}>, {
+    label: string;
+    baselineStart: string;
+    baselineEnd: string;
+    pilotStart: string;
+    pilotEnd: string;
+    minCell: number;
+    weeklyDecisionChangeCount: number;
+    offlineSyncIncidentCount: number;
+    integrationIncidentCount: number;
+    privacyIncidentCount: number;
+    securityIncidentCount: number;
+    evidenceDigest?: string | undefined;
+}, {
+    label: string;
+    baselineStart: string;
+    baselineEnd: string;
+    pilotStart: string;
+    pilotEnd: string;
+    minCell: number;
+    weeklyDecisionChangeCount: number;
+    offlineSyncIncidentCount: number;
+    integrationIncidentCount: number;
+    privacyIncidentCount: number;
+    securityIncidentCount: number;
+    evidenceDigest?: string | undefined;
+}>;
+export type PilotEvidenceRecordInput = z.infer<typeof PilotEvidenceRecordInputSchema>;

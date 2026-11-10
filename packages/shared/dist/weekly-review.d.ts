@@ -1,0 +1,126 @@
+import { z } from 'zod';
+export declare const WeeklyReviewPrioritySchema: z.ZodEnum<["critical", "high", "routine"]>;
+export type WeeklyReviewPriority = z.infer<typeof WeeklyReviewPrioritySchema>;
+export declare const WeeklyReviewDistrictSchema: z.ZodObject<{
+    administrativeAreaCode: z.ZodString;
+    signalCount: z.ZodNumber;
+    verifiedCount: z.ZodNumber;
+    ownedCount: z.ZodNumber;
+    actedCount: z.ZodNumber;
+    measuredCount: z.ZodNumber;
+    durableCount: z.ZodNumber;
+    unresolvedCount: z.ZodNumber;
+    recurrenceCount: z.ZodNumber;
+    blockerCount: z.ZodNumber;
+    priority: z.ZodEnum<["critical", "high", "routine"]>;
+}, "strict", z.ZodTypeAny, {
+    administrativeAreaCode: string;
+    signalCount: number;
+    verifiedCount: number;
+    ownedCount: number;
+    actedCount: number;
+    measuredCount: number;
+    durableCount: number;
+    unresolvedCount: number;
+    recurrenceCount: number;
+    blockerCount: number;
+    priority: "high" | "critical" | "routine";
+}, {
+    administrativeAreaCode: string;
+    signalCount: number;
+    verifiedCount: number;
+    ownedCount: number;
+    actedCount: number;
+    measuredCount: number;
+    durableCount: number;
+    unresolvedCount: number;
+    recurrenceCount: number;
+    blockerCount: number;
+    priority: "high" | "critical" | "routine";
+}>;
+export type WeeklyReviewDistrict = z.infer<typeof WeeklyReviewDistrictSchema>;
+export declare const WeeklyReviewSummarySchema: z.ZodObject<{
+    weekStart: z.ZodString;
+    weekEnd: z.ZodString;
+    minCell: z.ZodNumber;
+    districts: z.ZodArray<z.ZodObject<{
+        administrativeAreaCode: z.ZodString;
+        signalCount: z.ZodNumber;
+        verifiedCount: z.ZodNumber;
+        ownedCount: z.ZodNumber;
+        actedCount: z.ZodNumber;
+        measuredCount: z.ZodNumber;
+        durableCount: z.ZodNumber;
+        unresolvedCount: z.ZodNumber;
+        recurrenceCount: z.ZodNumber;
+        blockerCount: z.ZodNumber;
+        priority: z.ZodEnum<["critical", "high", "routine"]>;
+    }, "strict", z.ZodTypeAny, {
+        administrativeAreaCode: string;
+        signalCount: number;
+        verifiedCount: number;
+        ownedCount: number;
+        actedCount: number;
+        measuredCount: number;
+        durableCount: number;
+        unresolvedCount: number;
+        recurrenceCount: number;
+        blockerCount: number;
+        priority: "high" | "critical" | "routine";
+    }, {
+        administrativeAreaCode: string;
+        signalCount: number;
+        verifiedCount: number;
+        ownedCount: number;
+        actedCount: number;
+        measuredCount: number;
+        durableCount: number;
+        unresolvedCount: number;
+        recurrenceCount: number;
+        blockerCount: number;
+        priority: "high" | "critical" | "routine";
+    }>, "many">;
+    decisionsNeeded: z.ZodArray<z.ZodEnum<["unresolved_outcomes", "persistent_recurrence", "response_blockers", "ownership_gaps"]>, "many">;
+    interpretation: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    minCell: number;
+    weekStart: string;
+    weekEnd: string;
+    districts: {
+        administrativeAreaCode: string;
+        signalCount: number;
+        verifiedCount: number;
+        ownedCount: number;
+        actedCount: number;
+        measuredCount: number;
+        durableCount: number;
+        unresolvedCount: number;
+        recurrenceCount: number;
+        blockerCount: number;
+        priority: "high" | "critical" | "routine";
+    }[];
+    decisionsNeeded: ("unresolved_outcomes" | "persistent_recurrence" | "response_blockers" | "ownership_gaps")[];
+    interpretation: string;
+}, {
+    minCell: number;
+    weekStart: string;
+    weekEnd: string;
+    districts: {
+        administrativeAreaCode: string;
+        signalCount: number;
+        verifiedCount: number;
+        ownedCount: number;
+        actedCount: number;
+        measuredCount: number;
+        durableCount: number;
+        unresolvedCount: number;
+        recurrenceCount: number;
+        blockerCount: number;
+        priority: "high" | "critical" | "routine";
+    }[];
+    decisionsNeeded: ("unresolved_outcomes" | "persistent_recurrence" | "response_blockers" | "ownership_gaps")[];
+    interpretation: string;
+}>;
+export type WeeklyReviewSummary = z.infer<typeof WeeklyReviewSummarySchema>;
+export declare function classifyWeeklyReviewPriority(input: Pick<WeeklyReviewDistrict, 'signalCount' | 'unresolvedCount' | 'recurrenceCount' | 'blockerCount'>): WeeklyReviewPriority;
+export declare function buildWeeklyReviewSummary(weekStart: Date, weekEnd: Date, minCell: number, districts: Omit<WeeklyReviewDistrict, 'priority'>[]): WeeklyReviewSummary;
