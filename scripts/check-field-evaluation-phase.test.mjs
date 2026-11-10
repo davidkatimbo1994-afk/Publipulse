@@ -1,0 +1,13 @@
+import { readWebSource } from './lib/web-source.mjs';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const main = readWebSource();
+const docs = fs.readFileSync(new URL('../docs/PHASE_4_FIELD_OPERATIONS.md', import.meta.url), 'utf8');
+const evalDocs = fs.readFileSync(new URL('../docs/PHASE_5_EVALUATION_GOVERNANCE.md', import.meta.url), 'utf8');
+assert.match(main, /indexedDB\.open\(fieldDbName/);
+assert.match(main, /clientSubmissionId: crypto\.randomUUID\(\)/);
+assert.match(main, /POST|method: 'POST'/);
+assert.match(main, /Access tokens are never/);
+assert.match(docs, /idempotent `clientSubmissionId`/);
+assert.match(evalDocs, /causal-effect claims/);
+console.log('Phase 4–5 static contract checks passed.');

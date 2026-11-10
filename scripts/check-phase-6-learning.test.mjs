@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const route = fs.readFileSync(new URL('../apps/api/src/learning-routes.ts', import.meta.url), 'utf8');
+const store = fs.readFileSync(new URL('../apps/api/src/postgres-learning-store.ts', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../apps/api/src/app.ts', import.meta.url), 'utf8');
+assert.match(route, /operational-patterns/);
+assert.match(route, /minimumSignalCell/);
+assert.match(route, /individualRecordsExcluded: true/);
+assert.match(route, /Descriptive operational learning only/);
+assert.match(store, /HAVING COUNT\(DISTINCT s\.id\) >= \$4/);
+assert.match(store, /set_config\('app\.organization_id'/);
+assert.match(app, /registerLearningRoutes/);
+assert.match(app, /learningStore/);
+console.log('Phase 6 operational-learning static contract checks passed.');
