@@ -1,0 +1,67 @@
+# Local development / evaluation stack. NOT a production deployment: see docs/DEPLOYMENT_SECURITY.md.
+name: publipulse
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: publipulse_admin
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?set DB_ADMIN_PASSWORD in .env}
+      POSTGRES_DB: publipulse
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U publipulse_admin -d publipulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # No published port on purpose: the database is reachable only from this compose network.
+
+  migrate:
+    image: postgres:16-alpine
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGHOST: db
+      PGUSER: publipulse_admin
+      PGPASSWORD: ${DB_ADMIN_PASSWORD:?set DB_ADMIN_PASSWORD in .env}
+      PGDATABASE: publipulse
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD in .env}
+    volumes:
+      - ./apps/api/migrations:/migrations:ro
+      - ./docker/db:/docker-db:ro
+    entrypoint: ["/bin/sh", "/docker-db/migrate.sh"]
+    restart: "no"
+
+  api:
+    build: { context: ., target: api, args: { ALLOW_NO_LOCKFILE: "${ALLOW_NO_LOCKFILE:-0}" } }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    environment:
+      # The image defaults to production, which requires https origins and a TLS database; this stack is local plain http.
+      NODE_ENV: development
+      API_PORT: "4000"
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173,http://localhost:5174}
+      DATABASE_URL: postgresql://publipulse_app:${DB_APP_PASSWORD}@db:5432/publipulse
+      # Without all three of these the API starts fail-closed (health endpoints only). Use your identity provider's values.
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_JWKS_URL: ${OIDC_JWKS_URL:-}
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+
+  web:
+    build: { context: ., target: web, args: { ALLOW_NO_LOCKFILE: "${ALLOW_NO_LOCKFILE:-0}" } }
+    ports:
+      - "5173:8080"
+    restart: unless-stopped
+
+  field:
+    build: { context: ., target: field, args: { ALLOW_NO_LOCKFILE: "${ALLOW_NO_LOCKFILE:-0}" } }
+    ports:
+      - "5174:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

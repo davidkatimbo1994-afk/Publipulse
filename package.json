@@ -1,0 +1,40 @@
+{
+  "name": "publipulse",
+  "private": true,
+  "version": "1.19.1",
+  "description": "PubliPulse monorepo — secure public health action platform (API + web command center + field app).",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "apps/field",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web,field -c blue,green,magenta \"npm run dev -w @publipulse/api\" \"npm run dev -w @publipulse/web\" \"npm run dev -w @publipulse/field\"",
+    "dev:web": "concurrently -k -n api,web -c blue,green \"npm run dev -w @publipulse/api\" \"npm run dev -w @publipulse/web\"",
+    "dev:field": "concurrently -k -n api,field -c blue,magenta \"npm run dev -w @publipulse/api\" \"npm run dev -w @publipulse/field\"",
+    "build": "npm run build -w @publipulse/shared && npm run build -w @publipulse/api && npm run build -w @publipulse/web && npm run build -w @publipulse/field",
+    "build:web": "npm run build -w @publipulse/shared && npm run build -w @publipulse/api && npm run build -w @publipulse/web",
+    "build:field": "npm run build -w @publipulse/shared && npm run build -w @publipulse/field",
+    "typecheck": "npm run build -w @publipulse/shared && npm run typecheck -w @publipulse/api && npm run typecheck -w @publipulse/web && npm run typecheck -w @publipulse/field",
+    "test": "npm run test:tools && npm run build -w @publipulse/shared && npm run test -w @publipulse/api && npm run test -w @publipulse/shared",
+    "audit:prod": "npm audit --omit=dev",
+    "test:contracts": "npm run test -w @publipulse/shared",
+    "check:migrations": "node scripts/check-migration-chain.mjs",
+    "test:tools": "node --test scripts/*.test.mjs",
+    "check:migration-checksums": "node scripts/check-migration-checksums.mjs",
+    "check:release-readiness": "node scripts/check-release-readiness.mjs",
+    "lockfile:refresh": "node scripts/refresh-lockfile.mjs",
+    "pilot:dhis2:metadata": "node scripts/dhis2-staging-metadata-smoke.mjs",
+    "check:sql": "node scripts/check-sql-arity.mjs && node scripts/check-sql-columns.mjs",
+    "test:db": "npm run test:db -w @publipulse/api",
+    "predev": "npm run build -w @publipulse/shared"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
