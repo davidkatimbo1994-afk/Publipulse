@@ -1,0 +1,86 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Verify immutable GitHub Action pins
+        run: node scripts/check-workflow-action-pins.mjs
+      - name: Require committed npm lockfile
+        run: |
+          test -f package-lock.json || (echo 'Release blocker: generate and commit package-lock.json with supported npm on a networked machine.' >&2; exit 1)
+      - run: npm ci
+      - name: Verify lockfile matches workspace manifests
+        run: node scripts/verify-lockfile.mjs
+      - name: Run release-readiness preflight
+        run: npm run check:release-readiness
+      - run: npm run check:migrations
+      - name: SQL arity and schema guards
+        run: npm run check:sql
+      - run: npm run check:migration-checksums
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm audit --omit=dev
+  postgres-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: publipulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d publipulse_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify immutable GitHub Action pins
+        run: node scripts/check-workflow-action-pins.mjs
+      - name: Validate migration chain before database changes
+        run: node scripts/check-migration-chain.mjs
+      - name: Verify migration checksums before database changes
+        run: node scripts/check-migration-checksums.mjs
+      - name: Apply schema migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          for migration in apps/api/migrations/*.sql; do
+            echo "Applying ${migration}"
+            psql -h localhost -U postgres -d publipulse_test -v ON_ERROR_STOP=1 -f "${migration}"
+          done
+      - name: Verify tenant isolation and append-only audit as non-owner runtime role
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d publipulse_test -v ON_ERROR_STOP=1 -f apps/api/test/sql/rls.integration.sql
+      - name: Verify audit integrity control posture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d publipulse_test -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify_audit_integrity_posture.sql
+      - name: Verify outcome schema and tenant integrity
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d publipulse_test -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify_outcome_integrity.sql
+      - name: Verify Action Gap reconciliation schema integrity
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d publipulse_test -v ON_ERROR_STOP=1 -f apps/api/test/sql/verify_action_gap_reconciliation_integrity.sql

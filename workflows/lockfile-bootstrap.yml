@@ -1,0 +1,81 @@
+name: Lockfile bootstrap and release verification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publipulse-lockfile-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  generate-lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.16.0
+      - name: Verify immutable GitHub Action pins
+        run: node scripts/check-workflow-action-pins.mjs
+      - name: Record toolchain versions
+        run: |
+          node --version
+          npm --version
+      - name: Generate lockfile from workspace manifests
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify lockfile exists and is valid JSON
+        run: node -e "const fs=require('node:fs'); const p=JSON.parse(fs.readFileSync('package-lock.json','utf8')); if(p.lockfileVersion !== 3 || !p.packages || !p.packages['']) process.exit(1); console.log('npm lockfile v3 generated')"
+      - name: Verify lockfile matches all workspace manifests
+        run: node scripts/verify-lockfile.mjs
+      - name: Create lockfile checksum
+        run: sha256sum package-lock.json > package-lock.sha256
+      - name: Upload generated lockfile and checksum
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: publipulse-package-lock
+          path: |
+            package-lock.json
+            package-lock.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  validate-lockfile:
+    needs: generate-lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.16.0
+      - name: Download generated lockfile
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: publipulse-package-lock
+          path: .
+      - name: Verify lockfile artifact checksum
+        run: sha256sum --check package-lock.sha256
+      - name: Confirm clean install uses lockfile
+        run: npm ci
+      - name: Verify lockfile matches workspace manifests
+        run: node scripts/verify-lockfile.mjs
+      - name: Run release-readiness preflight
+        run: npm run check:release-readiness
+      - name: Validate migration chain
+        run: npm run check:migrations
+      - name: Verify migration checksums
+        run: npm run check:migration-checksums
+      - name: Run dependency-free engineering tests
+        run: npm run test:tools
+      - name: Typecheck all workspaces
+        run: npm run typecheck
+      - name: Run application and contract tests
+        run: npm test
+      - name: Build production workspaces
+        run: npm run build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
