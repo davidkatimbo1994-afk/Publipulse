@@ -1,0 +1,23 @@
+import { canManageHandoffs } from './action-handoff-store.js';
+import { parseQueryLimit } from './request-validation.js';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const TYPES = new Set(['initiated', 'accepted', 'declined', 'cancelled']);
+export async function registerActionHandoffRoutes(app, opts) {
+    const actorFor = async (req) => opts.resolveActor(typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined);
+    app.post('/v1/actions/:actionId/handoffs', async (req, reply) => { const actor = await actorFor(req); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canManageHandoffs(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { actionId } = req.params; if (!actionId || !UUID.test(actionId))
+        return reply.code(400).send({ error: 'invalid_action_id', requestId: req.id }); const b = req.body; if (!b || typeof b !== 'object' || !TYPES.has(b.eventType))
+        return reply.code(400).send({ error: 'invalid_handoff_event', requestId: req.id }); const to = b.toUserId === undefined || b.toUserId === null ? null : b.toUserId; if (to !== null && (typeof to !== 'string' || !UUID.test(to)))
+        return reply.code(400).send({ error: 'invalid_recipient_id', requestId: req.id }); const note = b.note === undefined || b.note === null ? null : b.note; if (note !== null && (typeof note !== 'string' || note.length > 2000))
+        return reply.code(400).send({ error: 'invalid_note', requestId: req.id }); const r = await opts.store.append(actor, actionId, b.eventType, to, note); if (r.kind === 'action_not_found')
+        return reply.code(404).send({ error: 'action_not_found', requestId: req.id }); if (r.kind === 'recipient_not_active')
+        return reply.code(400).send({ error: 'recipient_not_active_member', requestId: req.id }); if (r.kind === 'invalid_transition')
+        return reply.code(409).send({ error: 'invalid_handoff_transition', requestId: req.id }); return reply.code(201).send({ event: r.event }); });
+    app.get('/v1/actions/:actionId/handoffs', async (req, reply) => { const actor = await actorFor(req); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canManageHandoffs(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { actionId } = req.params; if (!actionId || !UUID.test(actionId))
+        return reply.code(400).send({ error: 'invalid_action_id', requestId: req.id }); const limit = parseQueryLimit(req.query.limit, 50); if (limit === null)
+        return reply.code(400).send({ error: 'invalid_limit', requestId: req.id }); const rows = await opts.store.list(actor, actionId, limit); if (rows === null)
+        return reply.code(404).send({ error: 'action_not_found', requestId: req.id }); return reply.send({ events: rows }); });
+}

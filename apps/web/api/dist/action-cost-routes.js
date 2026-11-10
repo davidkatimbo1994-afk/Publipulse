@@ -1,0 +1,24 @@
+import { ActionCostEntrySchema, totalActionCosts } from '@publipulse/shared';
+import { canReadActionCosts, canRecordActionCost } from './action-cost-store.js';
+import { parseQueryLimit } from './request-validation.js';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export async function registerActionCostRoutes(app, opts) {
+    app.post('/v1/actions/:actionId/costs', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canRecordActionCost(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { actionId } = req.params; if (!actionId || !UUID.test(actionId))
+        return reply.code(400).send({ error: 'invalid_action_id', requestId: req.id }); const clientMutationId = typeof req.headers['x-client-mutation-id'] === 'string' ? req.headers['x-client-mutation-id'] : undefined; if (clientMutationId && !UUID.test(clientMutationId))
+        return reply.code(400).send({ error: 'invalid_client_mutation_id', requestId: req.id }); const parsed = ActionCostEntrySchema.safeParse(req.body); if (!parsed.success)
+        return reply.code(400).send({ error: 'invalid_action_cost_entry', issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), code: i.code })), requestId: req.id }); const r = await opts.store.create(actor, actionId, parsed.data, clientMutationId); if (r.kind === 'action_not_found')
+        return reply.code(404).send({ error: 'action_not_found', requestId: req.id }); if (r.kind === 'mutation_conflict')
+        return reply.code(409).send({ error: 'client_mutation_id_conflict', requestId: req.id }); return reply.code(r.kind === 'replayed' ? 200 : 201).send({ entry: r.entry, replayed: r.kind === 'replayed' }); });
+    app.get('/v1/actions/:actionId/costs', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReadActionCosts(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { actionId } = req.params; if (!actionId || !UUID.test(actionId))
+        return reply.code(400).send({ error: 'invalid_action_id', requestId: req.id }); const limit = parseQueryLimit(req.query.limit); if (limit === null)
+        return reply.code(400).send({ error: 'invalid_limit', requestId: req.id }); const rows = await opts.store.list(actor, actionId, limit); if (rows === null)
+        return reply.code(404).send({ error: 'action_not_found', requestId: req.id }); return reply.send({ entries: rows, totals: totalActionCosts(rows) }); });
+    app.get('/v1/costs/summary', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReadActionCosts(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const limit = parseQueryLimit(req.query.limit); if (limit === null)
+        return reply.code(400).send({ error: 'invalid_limit', requestId: req.id }); return reply.send({ actions: await opts.store.summarize(actor, limit), basis: 'actual_cost_per_improved_assessment', notCostPerLifeSaved: true }); });
+}

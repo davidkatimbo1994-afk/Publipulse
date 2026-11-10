@@ -1,0 +1,31 @@
+import { z } from 'zod';
+import { GAP_RULES, canCreateGap, canReadGaps, canReviewGaps } from './action-gap-store.js';
+import { evaluateAndPersistActionGaps } from './action-gap/runner.js';
+import { parseQueryLimit } from './request-validation.js';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const Input = z.object({ signalId: z.string().regex(UUID), ruleCode: z.enum(GAP_RULES), ruleVersion: z.string().trim().min(1).max(40), severity: z.enum(['urgent', 'high', 'watch', 'clear']), explanation: z.string().trim().min(3).max(2000), supportingEvidence: z.record(z.unknown()).default({}), recommendedNextStep: z.string().trim().min(3).max(1000) }).strict();
+const Review = z.object({ status: z.enum(['acknowledged', 'dismissed', 'resolved']), expectedStatus: z.enum(['open', 'acknowledged', 'dismissed', 'resolved']), note: z.string().max(2000).nullable().optional() }).strict();
+export async function registerActionGapRoutes(app, opts) {
+    const actorFor = async (authorizationHeader, organizationHeader) => opts.resolveActor(typeof authorizationHeader === 'string' ? authorizationHeader : undefined, typeof organizationHeader === 'string' ? organizationHeader : undefined);
+    app.post('/v1/action-gaps/evaluate', async (req, reply) => { const actor = await actorFor(req.headers.authorization, req.headers['x-organization-id']); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canCreateGap(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); if (!opts.workflowCases)
+        return reply.code(503).send({ error: 'action_gap_evaluator_not_configured', requestId: req.id }); const p = z.object({ limit: z.number().int().min(1).max(200).default(100) }).strict().safeParse(req.body ?? {}); if (!p.success)
+        return reply.code(400).send({ error: 'invalid_evaluation_request', requestId: req.id }); const cases = await opts.workflowCases.listForEvaluation(actor, p.data.limit); const summary = await evaluateAndPersistActionGaps(actor, cases, opts.store); return reply.send({ summary, scope: 'authenticated_organization', note: 'Findings identify workflow gaps for human review; they are not outbreak or causal determinations.' }); });
+    app.post('/v1/action-gaps', async (req, reply) => { const actor = await actorFor(req.headers.authorization, req.headers['x-organization-id']); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canCreateGap(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const p = Input.safeParse(req.body); if (!p.success)
+        return reply.code(400).send({ error: 'invalid_action_gap', issues: p.error.issues.map(i => ({ path: i.path.join('.'), code: i.code })), requestId: req.id }); const r = await opts.store.create(actor, p.data); if (r.kind === 'signal_not_found')
+        return reply.code(404).send({ error: 'signal_not_found', requestId: req.id }); return reply.code(r.kind === 'created' ? 201 : 200).send({ detection: r.detection, replayed: r.kind === 'existing' }); });
+    app.get('/v1/action-gaps', async (req, reply) => { const actor = await actorFor(req.headers.authorization, req.headers['x-organization-id']); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReadGaps(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const q = req.query; const limit = parseQueryLimit(q.limit); const statuses = ['open', 'acknowledged', 'dismissed', 'resolved']; if (limit === null || (q.status !== undefined && !statuses.includes(q.status)))
+        return reply.code(400).send({ error: 'invalid_query', requestId: req.id }); return reply.send({ detections: await opts.store.list(actor, limit, q.status) }); });
+    app.patch('/v1/action-gaps/:id/review', async (req, reply) => { const actor = await actorFor(req.headers.authorization, req.headers['x-organization-id']); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReviewGaps(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { id } = req.params; if (!UUID.test(id))
+        return reply.code(400).send({ error: 'invalid_action_gap_id', requestId: req.id }); const p = Review.safeParse(req.body); if (!p.success)
+        return reply.code(400).send({ error: 'invalid_review', requestId: req.id }); const r = await opts.store.review(actor, id, p.data.status, p.data.note ?? null, p.data.expectedStatus); if (r.kind === 'not_found')
+        return reply.code(404).send({ error: 'action_gap_not_found', requestId: req.id }); if (r.kind === 'conflict')
+        return reply.code(409).send({ error: 'action_gap_status_conflict', requestId: req.id }); return reply.send({ detection: r.detection }); });
+}

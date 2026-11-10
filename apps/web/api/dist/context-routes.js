@@ -1,0 +1,27 @@
+import { ExternalContextObservationSchema } from '@publipulse/shared';
+import { canReadContext, canRecordContext } from './context-store.js';
+import { parseQueryLimit } from './request-validation.js';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const AREA = /^[A-Za-z0-9._-]{1,80}$/;
+const METRIC = /^[a-z0-9_.-]{1,80}$/;
+export async function registerContextRoutes(app, opts) {
+    app.post('/v1/context/observations', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canRecordContext(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const clientMutationId = typeof req.headers['x-client-mutation-id'] === 'string' ? req.headers['x-client-mutation-id'] : undefined; if (clientMutationId && !UUID.test(clientMutationId))
+        return reply.code(400).send({ error: 'invalid_client_mutation_id', requestId: req.id }); const parsed = ExternalContextObservationSchema.safeParse(req.body); if (!parsed.success)
+        return reply.code(400).send({ error: 'invalid_context_observation', issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), code: i.code })), requestId: req.id }); const r = await opts.store.record(actor, parsed.data, clientMutationId); if (r.kind === 'mutation_conflict')
+        return reply.code(409).send({ error: 'client_mutation_id_conflict', requestId: req.id }); return reply.code(r.kind === 'replayed' ? 200 : 201).send({ observation: r.observation, replayed: r.kind === 'replayed' }); });
+    app.get('/v1/context/observations', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReadContext(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const q = req.query; const limit = parseQueryLimit(q.limit); if (limit === null)
+        return reply.code(400).send({ error: 'invalid_limit', requestId: req.id }); if (q.areaCode !== undefined && (typeof q.areaCode !== 'string' || !AREA.test(q.areaCode)))
+        return reply.code(400).send({ error: 'invalid_area_code', requestId: req.id }); if (q.metricCode !== undefined && (typeof q.metricCode !== 'string' || !METRIC.test(q.metricCode)))
+        return reply.code(400).send({ error: 'invalid_metric_code', requestId: req.id }); const filter = {}; if (typeof q.areaCode === 'string')
+        filter.areaCode = q.areaCode; if (typeof q.metricCode === 'string')
+        filter.metricCode = q.metricCode; return reply.send({ observations: await opts.store.list(actor, filter, limit) }); });
+    app.get('/v1/signals/:signalId/context', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+        return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canReadContext(actor))
+        return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const { signalId } = req.params; if (!signalId || !UUID.test(signalId))
+        return reply.code(400).send({ error: 'invalid_signal_id', requestId: req.id }); const ctx = await opts.store.forSignal(actor, signalId); if (ctx === null)
+        return reply.code(404).send({ error: 'signal_not_found', requestId: req.id }); return reply.send({ ...ctx, interpretation: 'association_in_time_only', causalClaim: false }); });
+}

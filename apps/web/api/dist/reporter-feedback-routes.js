@@ -1,0 +1,12 @@
+import { z } from 'zod';
+import { publicHealthNarrative } from '@publipulse/shared';
+import { canManageReporterFeedback } from './reporter-feedback-store.js';
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const FeedbackSchema = z.object({ sourceType: z.enum(['community_report', 'facility_report', 'field_observation', 'research', 'other']), feedbackStage: z.enum(['received', 'under_review', 'action_underway', 'follow_up_done', 'outcome_recorded']), deliveryChannel: z.enum(['sms', 'ussd', 'offline_sync', 'other']), deliveryStatus: z.enum(['queued', 'not_attempted']), deliveredAt: z.string().datetime({ offset: true }).nullable().optional(), nonIdentifyingMessage: publicHealthNarrative(z.string().trim().min(3).max(500)) }).strict().superRefine((v, c) => { if (v.deliveredAt)
+    c.addIssue({ code: z.ZodIssueCode.custom, path: ['deliveredAt'], message: 'delivery_status_not_assertable_at_intake' }); });
+export async function registerReporterFeedbackRoutes(app, opts) { app.post('/v1/signals/:signalId/reporter-feedback', async (req, reply) => { const actor = await opts.resolveActor(req.headers.authorization, typeof req.headers['x-organization-id'] === 'string' ? req.headers['x-organization-id'] : undefined); if (!actor)
+    return reply.code(401).send({ error: 'authentication_required', requestId: req.id }); if (!canManageReporterFeedback(actor))
+    return reply.code(403).send({ error: 'insufficient_permissions', requestId: req.id }); const signalId = req.params.signalId; if (!signalId || !UUID.test(signalId))
+    return reply.code(400).send({ error: 'invalid_signal_id', requestId: req.id }); const clientMutationId = typeof req.headers['x-client-mutation-id'] === 'string' ? req.headers['x-client-mutation-id'] : undefined; if (clientMutationId && !UUID.test(clientMutationId))
+    return reply.code(400).send({ error: 'invalid_client_mutation_id', requestId: req.id }); const parsed = FeedbackSchema.safeParse(req.body); if (!parsed.success)
+    return reply.code(400).send({ error: 'invalid_reporter_feedback', issues: parsed.error.issues.map(i => ({ path: i.path.join('.'), code: i.code })), requestId: req.id }); const result = await opts.store.append(actor, { signalId, ...(clientMutationId ? { clientMutationId } : {}), ...parsed.data }); return reply.code(result.kind === 'replayed' ? 200 : 201).send({ accepted: true, appendOnly: true, replayed: result.kind === 'replayed', deliveryStatus: parsed.data.deliveryStatus, requestId: req.id }); }); }
